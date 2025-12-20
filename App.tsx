@@ -52,7 +52,7 @@ const VOICES = [
 
 // --- Boot/Config Screen ---
 
-const ConfigScreen: React.FC<{ onStart: (config: SystemConfig) => void }> = ({ onStart }) => {
+const ConfigScreen: React.FC<{ onStart: (config: SystemConfig) => void; error?: string | null }> = ({ onStart, error }) => {
   const [load, setLoad] = useState<CognitiveLoad>(CognitiveLoad.BALANCED);
   const [lang, setLang] = useState<SystemLanguage>(SystemLanguage.GERMAN);
 
@@ -133,6 +133,13 @@ const ConfigScreen: React.FC<{ onStart: (config: SystemConfig) => void }> = ({ o
                    ))}
                 </div>
              </div>
+
+             {/* Error Message */}
+             {error && (
+               <div className="bg-[#FF4B2B]/20 border border-[#FF4B2B] p-4 text-[#FF4B2B] text-xs font-bold uppercase tracking-wide">
+                 CRITICAL_BOOT_FAILURE: {error}
+               </div>
+             )}
 
              {/* Start Button */}
              <button
@@ -242,6 +249,7 @@ export const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [initError, setInitError] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -262,8 +270,14 @@ export const App: React.FC = () => {
   // --- Core Logic ---
 
   const handleSystemStart = (newConfig: SystemConfig) => {
-    initChatSession(newConfig);
-    setConfig(newConfig);
+    try {
+      setInitError(null);
+      initChatSession(newConfig);
+      setConfig(newConfig);
+    } catch (err: any) {
+      console.error("Initialization failed:", err);
+      setInitError(err.message || "Failed to initialize logic core.");
+    }
   };
 
   const handleReset = () => {
@@ -275,6 +289,7 @@ export const App: React.FC = () => {
     setAudioBuffer(null);
     setInputText("");
     setStatus(AppStatus.IDLE);
+    setInitError(null);
     stopAudio();
   };
 
@@ -315,10 +330,10 @@ export const App: React.FC = () => {
       const speechBase64 = await generateSpeech(result.spiegel_intervention, selectedVoice);
       playAudio(speechBase64);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setStatus(AppStatus.ERROR);
-      setErrorMessage("LOGIC_CORE_FAILURE");
+      setErrorMessage(err.message || "LOGIC_CORE_FAILURE");
     }
   };
 
@@ -486,7 +501,7 @@ export const App: React.FC = () => {
   // --- Render ---
 
   if (!config) {
-    return <ConfigScreen onStart={handleSystemStart} />;
+    return <ConfigScreen onStart={handleSystemStart} error={initError} />;
   }
 
   return (
