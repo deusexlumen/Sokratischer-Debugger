@@ -1,9 +1,11 @@
 
-import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { AnalysisResponse } from "../types";
+import { GoogleGenAI, Type, Modality, Chat } from "@google/genai";
+import { AnalysisResponse, SystemConfig, CognitiveLoad, SystemLanguage } from "../types";
 import { blobToBase64 } from "../utils/audioUtils";
 
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+
+// --- Helper for Single Shot Actions (Transcription/File Reading) ---
 
 export const transcribeAudio = async (base64Audio: string): Promise<string> => {
   const ai = getAI();
@@ -20,10 +22,6 @@ export const transcribeAudio = async (base64Audio: string): Promise<string> => {
 };
 
 export const extractTextFromFile = async (file: File): Promise<string> => {
-  // Logic: 
-  // 1. Text/Markdown files -> Read directly in browser (Fast, no API cost)
-  // 2. PDFs -> Send to Gemini (Multimodal capability)
-  
   if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -33,7 +31,6 @@ export const extractTextFromFile = async (file: File): Promise<string> => {
     });
   }
 
-  // For PDFs or other supported docs, use Gemini 2.5 Flash for fast extraction
   try {
     const base64Data = await blobToBase64(file);
     const ai = getAI();
@@ -53,13 +50,13 @@ export const extractTextFromFile = async (file: File): Promise<string> => {
   }
 };
 
-export const analyzeText = async (text: string, useThinking: boolean): Promise<AnalysisResponse> => {
-  const ai = getAI();
-  const systemInstruction = `
-# MISSION: SOKRATISCHER DEBUGGER V1.0 (GEHIRN)
+// --- Chat Logic ---
+
+const BASE_INSTRUCTION = `
+# MISSION: SOKRATISCHER DEBUGGER (CORE)
 
 ## IDENTITÄT
-Du bist ein semantisches Analyse-Werkzeug. Du agierst als externer Frontallappen für einen Nutzer im "Gott-Modus" (höchste logische Abstraktion). Deine Aufgabe ist die radikale Dekonstruktion unpräziser Sprache.
+Du bist ein semantisches Analyse-Werkzeug. Du agierst als externer Frontallappen für einen Nutzer. Deine Aufgabe ist die Dekonstruktion unpräziser Sprache.
 
 ## CORE ALGORITHM: DIE LÜCKEN-ANALYSE
 Jeder Input muss auf "Hohl-Wörter" (Abstrakte Nominalwerte) geprüft werden.
@@ -70,7 +67,7 @@ Jeder Input muss auf "Hohl-Wörter" (Abstrakte Nominalwerte) geprüft werden.
    - V (Validierung): Woran wird der Zustand binär oder skalar gemessen?
 
 ## OUTPUT-SCHEMA (STRICT JSON)
-Antworte ausschließlich im JSON-Format für die Interface-Verarbeitung:
+Du musst JEDE Antwort ausschließlich im JSON-Format geben.
 {
   "detected_voids": [
     {
@@ -79,69 +76,139 @@ Antworte ausschließlich im JSON-Format für die Interface-Verarbeitung:
       "socratic_questions": { "L": "string", "M": "string", "V": "string" }
     }
   ],
-  "spiegel_intervention": "string"
+  "spiegel_intervention": "string" // Deine Antwort an den User.
 }
+`;
 
-## CONSTRAINTS
-- Ersetze 'Gefühl' durch 'sensorischen Input + kognitive Bewertung'.
-- Keine Höflichkeitsfloskeln. 
-- Absolute Reduktion auf logische Primärdaten.
-  `;
-
-  const config: any = {
-    systemInstruction,
-    responseMimeType: "application/json",
-    responseSchema: {
-      type: Type.OBJECT,
-      properties: {
-        detected_voids: {
-          type: Type.ARRAY,
-          items: {
+const RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    detected_voids: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          word: { type: Type.STRING },
+          logic_gap: { type: Type.STRING },
+          socratic_questions: {
             type: Type.OBJECT,
             properties: {
-              word: { type: Type.STRING },
-              logic_gap: { type: Type.STRING },
-              socratic_questions: {
-                type: Type.OBJECT,
-                properties: {
-                  L: { type: Type.STRING },
-                  M: { type: Type.STRING },
-                  V: { type: Type.STRING }
-                },
-                required: ["L", "M", "V"]
-              }
+              L: { type: Type.STRING },
+              M: { type: Type.STRING },
+              V: { type: Type.STRING }
             },
-            required: ["word", "logic_gap", "socratic_questions"]
+            required: ["L", "M", "V"]
           }
         },
-        spiegel_intervention: { type: Type.STRING }
-      },
-      required: ["detected_voids", "spiegel_intervention"]
-    }
+        required: ["word", "logic_gap", "socratic_questions"]
+      }
+    },
+    spiegel_intervention: { type: Type.STRING }
+  },
+  required: ["detected_voids", "spiegel_intervention"]
+};
+
+// Store chat instances in memory
+let currentChat: Chat | null = null;
+let currentConfig: SystemConfig | null = null;
+
+const generateSystemPrompt = (config: SystemConfig): string => {
+  let modeInstruction = "";
+  let langInstruction = config.language === SystemLanguage.GERMAN 
+    ? "Antworte IMMER auf DEUTSCH." 
+    : "Antworte IMMER auf ENGLISCH (English).";
+
+  switch (config.load) {
+    case CognitiveLoad.SIMPLIFIED:
+      modeInstruction = `
+        MODUS: SIMPLIFIED / EINSTEIGER.
+        - Erkläre logische Lücken so einfach wie möglich.
+        - Verzichte auf komplexes Fachchinesisch.
+        - Sei geduldig und lehrend.
+        - Deine Intervention soll freundlich und unterstützend sein.
+      `;
+      break;
+    case CognitiveLoad.BALANCED:
+      modeInstruction = `
+        MODUS: BALANCED / STANDARD.
+        - Nutze klare, konversationelle Sprache.
+        - Balanciere Präzision mit Lesbarkeit.
+        - Sei direkt, aber nicht unhöflich.
+      `;
+      break;
+    case CognitiveLoad.ACADEMIC:
+      modeInstruction = `
+        MODUS: ACADEMIC / WISSENSCHAFTLICH.
+        - Nutze hochpräzise Terminologie.
+        - Formuliere wie ein Logik-Professor oder Wissenschaftler.
+        - Erwarte vom Nutzer ein hohes intellektuelles Niveau.
+      `;
+      break;
+    case CognitiveLoad.RUTHLESS:
+      modeInstruction = `
+        MODUS: RUTHLESS / GOTT-MODUS.
+        - KEINE Höflichkeitsfloskeln.
+        - Absolute Reduktion auf logische Primärdaten.
+        - Sei brutal ehrlich. Dekonstruiere das Ego des Nutzers.
+        - Handle als kalte, industrielle Maschine.
+      `;
+      break;
+  }
+
+  return `${BASE_INSTRUCTION}\n\n${langInstruction}\n\n${modeInstruction}`;
+};
+
+export const initChatSession = (config: SystemConfig, useThinking: boolean = true) => {
+  const ai = getAI();
+  const systemInstruction = generateSystemPrompt(config);
+  currentConfig = config;
+
+  const geminiConfig: any = {
+    systemInstruction: systemInstruction,
+    responseMimeType: "application/json",
+    responseSchema: RESPONSE_SCHEMA,
   };
 
   if (useThinking) {
-    config.thinkingConfig = { thinkingBudget: 32768 };
+    geminiConfig.thinkingConfig = { thinkingBudget: 32768 };
   }
 
-  const response = await ai.models.generateContent({
+  currentChat = ai.chats.create({
     model: 'gemini-3-pro-preview',
-    contents: text,
-    config
+    config: geminiConfig
   });
+  return currentChat;
+};
 
+export const sendMessageToChat = async (text: string): Promise<AnalysisResponse> => {
+  // If no chat exists, we must initialize with defaults (fallback)
+  if (!currentChat) {
+    initChatSession({ 
+      load: CognitiveLoad.BALANCED, 
+      language: SystemLanguage.GERMAN 
+    });
+  }
+  
   try {
+    const response = await currentChat!.sendMessage({ message: text });
     return JSON.parse(response.text || "{}");
   } catch (e) {
-    throw new Error("Failed to parse analysis response.");
+    console.error("Chat Error:", e);
+    throw new Error("DATA_CORRUPTION_DETECTED: Invalid JSON Response");
   }
+};
+
+export const resetChat = () => {
+  currentChat = null;
+  // We keep currentConfig to re-init with same settings if needed, 
+  // but usually UI handles re-init.
 };
 
 export const generateSpeech = async (text: string, voiceName: string = 'Kore'): Promise<string> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: `Lies dies mit analytischer, kühler Präzision: ${text}` }] }],
+    contents: [{ parts: [{ text: `Lies dies: ${text}` }] }],
     config: {
       responseModalities: [Modality.AUDIO],
       speechConfig: {

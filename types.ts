@@ -16,6 +16,14 @@ export interface AnalysisResponse {
   spiegel_intervention: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'system';
+  text: string;
+  timestamp: number;
+  analysis?: AnalysisResponse; // Only system messages have analysis data
+}
+
 export enum AppStatus {
   IDLE = 'IDLE',
   RECORDING = 'RECORDING',
@@ -24,4 +32,21 @@ export enum AppStatus {
   ANALYZING = 'ANALYZING',
   SPEAKING = 'SPEAKING',
   ERROR = 'ERROR'
+}
+
+export enum CognitiveLoad {
+  SIMPLIFIED = 'SIMPLIFIED',   // Easy to understand, gentle
+  BALANCED = 'BALANCED',       // Standard conversational
+  ACADEMIC = 'ACADEMIC',       // High precision, scientific
+  RUTHLESS = 'RUTHLESS'        // The original "God Mode"
+}
+
+export enum SystemLanguage {
+  GERMAN = 'DE',
+  ENGLISH = 'EN'
+}
+
+export interface SystemConfig {
+  load: CognitiveLoad;
+  language: SystemLanguage;
 }
