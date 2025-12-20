@@ -75,6 +75,7 @@ Once analysis is complete:
     ```bash
     git clone [repo_url]
     ```
+   
 
 2.  **Install Dependencies:**
     ```bash
@@ -91,6 +92,10 @@ Once analysis is complete:
     ```bash
     npm run dev
     ```
+
+# Or use it in ai Studio 
+
+## https://ai.studio/apps/drive/1I8EmBJdC0g1azqw4qhmPZNdNshEP6DO4?fullscreenApplet=true
 
 ## /// LICENSE
 Proprietary Logic Protocol V2.0.
