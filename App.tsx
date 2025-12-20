@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { sendMessageToChat, transcribeAudio, generateSpeech, extractTextFromFile, resetChat, initChatSession } from './services/geminiService';
 import { AppStatus, AnalysisResponse, DetectedVoid, ChatMessage, SystemConfig, CognitiveLoad, SystemLanguage } from './types';
@@ -157,7 +156,7 @@ const ConfigScreen: React.FC<{ onStart: (config: SystemConfig) => void }> = ({ o
 
 const StatusIndicator: React.FC<{ status: AppStatus }> = ({ status }) => {
   let colorClass = 'text-gray-600';
-  let label = status;
+  let label: string = status;
 
   if (status === AppStatus.ERROR) {
       colorClass = 'text-[#FF4B2B] bg-[#FF4B2B]/10 px-2';

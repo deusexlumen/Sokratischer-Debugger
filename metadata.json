@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Sokratischer Debugger V2.0",
+  "name": "Sokratischer Debugger V2.0",
   "description": "Ein externes Frontallappen-Interface zur radikalen Dekonstruktion unpräziser Sprache und semantischer Lückenanalyse.",
   "requestFramePermissions": [
     "microphone"
