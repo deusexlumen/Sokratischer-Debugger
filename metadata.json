@@ -1,0 +1,7 @@
+{
+  "name": "Sokratischer Debugger V1.0",
+  "description": "Ein externes Frontallappen-Interface zur radikalen Dekonstruktion unpräziser Sprache und semantischer Lückenanalyse.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
