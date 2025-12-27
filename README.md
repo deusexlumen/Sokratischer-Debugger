@@ -92,5 +92,11 @@ Once analysis is complete:
     npm run dev
     ```
 
+---
+    
+# Or use it in ai Studio 
+
+## https://ai.studio/apps/drive/1I8EmBJdC0g1azqw4qhmPZNdNshEP6DO4?fullscreenApplet=true
+
 ## /// LICENSE
 Proprietary Logic Protocol V2.0.
